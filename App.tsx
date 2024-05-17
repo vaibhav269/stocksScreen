@@ -1,117 +1,197 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
-import React from 'react';
-import type {PropsWithChildren} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
+  Alert,
+  FlatList,
+  Image,
   SafeAreaView,
-  ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
-  useColorScheme,
+  TouchableOpacity,
   View,
+  ListRenderItem,
+  StatusBar,
 } from 'react-native';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+const API_URL = 'https://35dee773a9ec441e9f38d5fc249406ce.api.mockbin.io/';
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+interface Holding {
+  symbol: string;
+  quantity: number;
+  ltp: number;
+  avgPrice: number;
+  profit?: string;
+}
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
+interface Details {
+  totalInvestment: string;
+  currentVal: string;
+}
+
+interface ApiResponse {
+  data: {
+    userHolding: Holding[];
+  };
 }
 
 function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+  const [userHoldings, setUserHoldings] = useState<Holding[]>([]);
+  const [isShowDetails, setIsShowDetails] = useState<boolean>(false);
+  const [details, setDetails] = useState<Details>({
+    totalInvestment: '0',
+    currentVal: '0',
+  });
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await fetch(API_URL);
+        if (response.ok) {
+          const json: ApiResponse = await response.json();
+          let totalInvestment = 0,
+            currentVal = 0;
+          const newHoldings: Holding[] = json.data.userHolding.map(holding => {
+            const profit = (
+              holding.quantity *
+              (holding.ltp - holding.avgPrice)
+            ).toFixed(2);
+            totalInvestment += holding.avgPrice * holding.quantity;
+            currentVal += holding.ltp * holding.quantity;
+            return {...holding, profit};
+          });
+
+          setUserHoldings(newHoldings);
+          setDetails({
+            totalInvestment: totalInvestment.toFixed(2),
+            currentVal: currentVal.toFixed(2),
+          });
+        } else {
+          Alert.alert('Some error occured while fetching the data');
+        }
+      } catch (error) {
+        Alert.alert('Some error occured while fetching the data');
+      }
+    };
+    fetchData();
+  }, []);
+
+  const handleToggleDetails = () => {
+    setIsShowDetails(!isShowDetails);
   };
 
+  const handleRenderItem: ListRenderItem<Holding> = ({item}) => (
+    <View style={styles.itemContainer}>
+      <View style={styles.row}>
+        <Text style={[styles.item, styles.bold]}>{item.symbol}</Text>
+        <Text style={styles.item}>
+          {' '}
+          LTP: <Text style={styles.bold}>&#8377;{item.ltp}</Text>
+        </Text>
+      </View>
+      <View style={[styles.row, styles.paddingTop]}>
+        <Text style={styles.item}>{item.quantity}</Text>
+        <Text style={styles.item}>
+          P/L: <Text style={styles.bold}>&#8377;{item.profit}</Text>
+        </Text>
+      </View>
+    </View>
+  );
+
+  const totalProfit =
+    parseFloat(details.currentVal) - parseFloat(details.totalInvestment);
+
   return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <View>
+        <Text style={[styles.header, styles.bold]}>Upstox Holding</Text>
+        <View style={styles.sectionList}>
+          <FlatList renderItem={handleRenderItem} data={userHoldings} />
         </View>
-      </ScrollView>
+      </View>
+      <View style={styles.sectionSummary}>
+        <TouchableOpacity onPress={handleToggleDetails}>
+          <View style={styles.toggler}>
+            <Image
+              style={styles.togglerImage}
+              source={
+                isShowDetails
+                  ? require('./img/chevron-arrow-down.png')
+                  : require('./img/chevron-arrow-up.png')
+              }
+            />
+          </View>
+        </TouchableOpacity>
+        {isShowDetails && Boolean(details) && (
+          <View style={styles.details}>
+            <View style={styles.row}>
+              <Text style={[styles.item, styles.bold]}>Current Value:</Text>
+              <Text style={styles.item}>&#8377;{details.currentVal}</Text>
+            </View>
+            <View style={styles.row}>
+              <Text style={[styles.item, styles.bold]}>Total Investment:</Text>
+              <Text style={styles.item}>&#8377;{details.totalInvestment}</Text>
+            </View>
+          </View>
+        )}
+        <View style={styles.row}>
+          <Text style={[styles.item, styles.bold]}>Profit & Loss</Text>
+          <Text style={styles.item}>&#8377;{totalProfit.toFixed(2)}</Text>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
+  paddingTop: {
+    paddingTop: 5,
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
   },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
+  details: {},
+  toggler: {
+    alignItems: 'center',
   },
-  highlight: {
-    fontWeight: '700',
+  togglerImage: {
+    height: 20,
+    width: 20,
+  },
+  itemContainer: {
+    borderBottomColor: 'black',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingTop: 5,
+    paddingBottom: 5,
+  },
+  bold: {
+    fontWeight: 'bold',
+  },
+  item: {
+    fontSize: 15,
+    color: 'black',
+  },
+  header: {
+    backgroundColor: '#7D017D',
+    color: 'white',
+    padding: 10,
+    fontSize: 17,
+  },
+  container: {
+    backgroundColor: '#C3C3C8',
+    height: '100%',
+    justifyContent: 'space-between',
+  },
+  sectionList: {
+    padding: 10,
+    paddingTop: 0,
+    backgroundColor: 'white',
+    height: '70%',
+  },
+  sectionSummary: {
+    padding: 10,
+    backgroundColor: 'white',
   },
 });
 
